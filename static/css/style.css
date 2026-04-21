@@ -957,7 +957,123 @@ body::before {
     100% { transform: scale(2.5); opacity: 0; }
 }
 
+/* ---------- Structured Report Card ---------- */
+.report-section {
+    padding: 0.65rem 0;
+}
+
+.report-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 0;
+}
+
+.report-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.report-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+}
+
+.report-value {
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.report-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+}
+
+/* Triggered By list */
+.report-list {
+    list-style: none;
+    padding: 0 0 0 0.75rem;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.report-list li {
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    position: relative;
+    padding-left: 0.9rem;
+}
+
+.report-list li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* Distance grid */
+.report-dist-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.dist-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--bg-card);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
+}
+
+.dist-icon { font-size: 0.9rem; }
+
+.dist-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.dist-val {
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Reason text */
+.report-reason {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
+/* Recommendation */
+.report-rec {
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+/* Legal footer */
+.report-legal {
+    margin-top: 0.65rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 0.73rem;
+    color: var(--text-muted);
+}
+
 /* ---------- Explainability Block — "Why This Risk?" ---------- */
+
 .why-block {
     margin: 0.75rem 0;
     padding: 0.85rem 1rem;

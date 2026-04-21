@@ -275,171 +275,171 @@ async function runAnalysis(lat, lon) {
 
 // ---------- Render Results ----------
 function renderResults(data) {
-    const riskIcons = { HIGH: '🔴', MEDIUM: '🟡', LOW: '🟢' };
-    const riskIcon = riskIcons[data.risk] || '⚪';
+    const riskColors = {
+        HIGH:   { bg: 'hsla(0,84%,60%,0.10)',   border: 'hsl(0,84%,60%)',   text: 'hsl(0,84%,65%)' },
+        MEDIUM: { bg: 'hsla(38,92%,50%,0.10)',  border: 'hsl(38,92%,50%)',  text: 'hsl(38,92%,55%)' },
+        LOW:    { bg: 'hsla(142,71%,45%,0.10)', border: 'hsl(142,71%,45%)', text: 'hsl(142,71%,50%)' },
+    };
+    const icons = { HIGH: '🔴', MEDIUM: '🟡', LOW: '🟢' };
+    const risk  = data.risk;
+    const col   = riskColors[risk] || riskColors.LOW;
 
-    // Calculate gauge percentage
-    const minDist = Math.min(data.water_distance_m, data.forest_distance_m);
-    const gaugePercent = Math.max(0, Math.min(100, 100 - (minDist / 50)));
+    // ── Triggered By ──────────────────────────────────────────────
+    const triggers = [];
+    if (data.water_risk === 'HIGH')   triggers.push('Inside water body');
+    if (data.forest_risk === 'HIGH')  triggers.push('Inside forest zone');
+    if (data.water_risk === 'MEDIUM') triggers.push(`Near water body (${data.water_distance_m} m)`);
+    if (data.forest_risk === 'MEDIUM')triggers.push(`Near forest zone (${data.forest_distance_m} m)`);
+    if (triggers.length === 0)        triggers.push('No restricted zone detected');
 
-    let gaugeColor;
-    if (data.risk === 'HIGH') gaugeColor = 'hsl(0, 84%, 60%)';
-    else if (data.risk === 'MEDIUM') gaugeColor = 'hsl(38, 92%, 50%)';
-    else gaugeColor = 'hsl(142, 71%, 45%)';
-
-    // ── Explainability: WHY this risk? ────────────────────────────────────
-    let whyText = '';
-    let ruleText = '';
-    if (data.risk === 'HIGH') {
-        if (data.water_risk === 'HIGH') {
-            whyText = `This location lies <strong>inside a water body</strong>. Construction here would cause direct environmental damage and violates the Water (Prevention and Control of Pollution) Act.`;
-            ruleText = 'Rule applied: <code>inside water body → HIGH</code>';
-        } else if (data.forest_risk === 'HIGH') {
-            whyText = `This location lies <strong>inside a forest or protected area</strong>. Construction here violates the Forest Conservation Act and environmental protection regulations.`;
-            ruleText = 'Rule applied: <code>inside forest/protected zone → HIGH</code>';
-        } else {
-            whyText = `This location is within a <strong>restricted environmental zone</strong> detected via OpenStreetMap data.`;
-            ruleText = 'Rule applied: <code>inside restricted zone → HIGH</code>';
-        }
-    } else if (data.risk === 'MEDIUM') {
-        const nearDist = Math.min(data.water_distance_m, data.forest_distance_m);
-        const nearType = data.water_distance_m < data.forest_distance_m ? 'water body' : 'forest zone';
-        whyText = `This location is <strong>${nearDist} meters from a ${nearType}</strong> — within the 100-meter buffer zone. Development may face environmental restrictions and require EIA clearance.`;
-        ruleText = 'Rule applied: <code>distance &lt; 100m → MEDIUM</code>';
+    // ── Reason sentence ───────────────────────────────────────────
+    let reason = '';
+    if (risk === 'HIGH') {
+        if (data.water_risk === 'HIGH' && data.forest_risk === 'HIGH')
+            reason = 'Location intersects both a water layer and a forest zone → unsafe for construction.';
+        else if (data.water_risk === 'HIGH')
+            reason = 'Location intersects water layer → unsafe for construction.';
+        else
+            reason = 'Location intersects forest/protected zone → construction not permitted.';
+    } else if (risk === 'MEDIUM') {
+        const d   = Math.min(data.water_distance_m, data.forest_distance_m);
+        const type= data.water_distance_m < data.forest_distance_m ? 'water body' : 'forest zone';
+        reason = `Location is ${d} m from a ${type} (within the 100 m buffer zone) → possible restrictions apply.`;
     } else {
-        whyText = `This location is <strong>more than 100 meters from all mapped water bodies and forest zones</strong>. No environmental zone violations detected.`;
-        ruleText = 'Rule applied: <code>distance ≥ 100m → LOW</code>';
+        reason = 'Location is far from all mapped water bodies and forest zones → no environmental constraint detected.';
     }
 
-    // Build flags HTML
-    let flagsHtml = '<span style="color: var(--text-muted); font-size: 0.8rem;">None detected</span>';
-    if (data.flags && data.flags.length > 0) {
-        flagsHtml = `<ul class="flag-list">${data.flags.map(f => `<li>${f}</li>`).join('')}</ul>`;
-    }
+    // ── Distances ─────────────────────────────────────────────────
+    const wDist = data.water_distance_m  === 0 ? '0 m (inside)' : `${data.water_distance_m} m`;
+    const fDist = data.forest_distance_m === 0 ? '0 m (inside)' : `${data.forest_distance_m} m`;
+
+    // ── Location sub-heading ──────────────────────────────────────
+    const locLabel = data.resolved_name
+        ? data.resolved_name.split(',')[0]
+        : `${data.lat?.toFixed(4)}, ${data.lon?.toFixed(4)}`;
 
     resultsPanel.innerHTML = `
-        <div class="risk-overview">
-            <!-- Risk Badge -->
-            <div class="risk-badge risk-${data.risk}" id="risk-badge">
-                <span class="risk-badge-icon">${riskIcon}</span>
-                <div class="risk-badge-text">
-                    <div class="risk-badge-label">Overall Risk Level${data.resolved_name ? ' — ' + data.resolved_name.split(',')[0] : ''}</div>
-                    <div class="risk-badge-value">${data.risk} RISK</div>
-                </div>
+      <div class="report-card" style="
+        background: ${col.bg};
+        border: 1.5px solid ${col.border};
+        border-radius: 12px;
+        padding: 1.1rem 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        animation: fadeInUp 0.3s ease;
+      ">
+
+        <!-- ① Risk Level -->
+        <div class="report-section">
+          <div class="report-row" style="align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
+            <span style="font-size:1.4rem;">${icons[risk]}</span>
+            <div>
+              <div class="report-label">Risk Level</div>
+              <div class="report-value" style="color:${col.text}; font-size:1.3rem; font-weight:800; letter-spacing:0.04em;">
+                ${risk}
+              </div>
             </div>
-
-            <!-- WHY THIS RISK — Explainability Block -->
-            <div class="why-block why-${data.risk}">
-                <div class="why-title">📋 Why ${data.risk} Risk?</div>
-                <p class="why-text">${whyText}</p>
-                <div class="why-rule">${ruleText}</div>
-            </div>
-
-            <!-- Risk Gauge -->
-            <div class="risk-gauge-container">
-                <div class="risk-gauge">
-                    <svg viewBox="0 0 160 90">
-                        <path class="gauge-bg" d="M 15 80 A 65 65 0 0 1 145 80" />
-                        <path class="gauge-fill" id="gauge-arc"
-                              d="M 15 80 A 65 65 0 0 1 145 80"
-                              stroke="${gaugeColor}"
-                              style="stroke-dasharray: 204; stroke-dashoffset: 204;" />
-                    </svg>
-                    <div class="gauge-label">
-                        <div class="gauge-value" style="color: ${gaugeColor}">${minDist}m</div>
-                        <div class="gauge-unit">nearest zone</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Detail Cards -->
-            <div class="detail-cards">
-                <div class="detail-card">
-                    <div class="detail-card-header">
-                        <span class="detail-card-icon">💧</span>
-                        <span class="detail-card-title">Water Body Analysis</span>
-                    </div>
-                    <div class="detail-card-value">
-                        <span class="risk-tag tag-${data.water_risk}">${data.water_risk}</span>
-                        ${data.water_reason}
-                    </div>
-                </div>
-
-                <div class="detail-card">
-                    <div class="detail-card-header">
-                        <span class="detail-card-icon">🌲</span>
-                        <span class="detail-card-title">Forest Zone Analysis</span>
-                    </div>
-                    <div class="detail-card-value">
-                        <span class="risk-tag tag-${data.forest_risk}">${data.forest_risk}</span>
-                        ${data.forest_reason}
-                    </div>
-                </div>
-
-                <div class="detail-card">
-                    <div class="detail-card-header">
-                        <span class="detail-card-icon">🚩</span>
-                        <span class="detail-card-title">Environmental Flags</span>
-                    </div>
-                    <div class="detail-card-value">${flagsHtml}</div>
-                </div>
-
-                <div class="detail-card">
-                    <div class="detail-card-header">
-                        <span class="detail-card-icon">⚖️</span>
-                        <span class="detail-card-title">Legal Risk</span>
-                    </div>
-                    <div class="detail-card-value">${data.legal_risk}</div>
-                </div>
-
-                <div class="detail-card">
-                    <div class="detail-card-header">
-                        <span class="detail-card-icon">✅</span>
-                        <span class="detail-card-title">Recommendation</span>
-                    </div>
-                    <div class="detail-card-value" style="font-weight: 600;">${data.recommendation}</div>
-                </div>
-            </div>
+          </div>
+          <div class="report-sub">${locLabel}</div>
         </div>
+
+        <div class="report-divider"></div>
+
+        <!-- ② Triggered By -->
+        <div class="report-section">
+          <div class="report-label">Triggered By</div>
+          <ul class="report-list" style="border-left:2px solid ${col.border};">
+            ${triggers.map(t => `<li>${t}</li>`).join('')}
+          </ul>
+        </div>
+
+        <div class="report-divider"></div>
+
+        <!-- ③ Distance -->
+        <div class="report-section">
+          <div class="report-label">Distance</div>
+          <div class="report-dist-grid">
+            <div class="dist-item">
+              <span class="dist-icon">💧</span>
+              <span class="dist-label">Water</span>
+              <span class="dist-val" style="color:${data.water_risk==='HIGH'?'hsl(0,84%,65%)':data.water_risk==='MEDIUM'?'hsl(38,92%,55%)':'var(--text-secondary)'};">
+                ${wDist}
+              </span>
+            </div>
+            <div class="dist-item">
+              <span class="dist-icon">🌲</span>
+              <span class="dist-label">Forest</span>
+              <span class="dist-val" style="color:${data.forest_risk==='HIGH'?'hsl(0,84%,65%)':data.forest_risk==='MEDIUM'?'hsl(38,92%,55%)':'var(--text-secondary)'};">
+                ${fDist}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="report-divider"></div>
+
+        <!-- ④ Reason -->
+        <div class="report-section">
+          <div class="report-label">Reason</div>
+          <div class="report-reason">${reason}</div>
+        </div>
+
+        <div class="report-divider"></div>
+
+        <!-- ⑤ Recommendation -->
+        <div class="report-section">
+          <div class="report-label">Recommendation</div>
+          <div class="report-rec" style="color:${col.text};">${data.recommendation}</div>
+        </div>
+
+        <!-- ⑥ Legal -->
+        <div class="report-legal">⚖️ Legal: ${data.legal_risk}</div>
+
+      </div>
     `;
 
-    // Animate gauge
-    requestAnimationFrame(() => {
-        const gaugeArc = document.getElementById('gauge-arc');
-        if (gaugeArc) {
-            const offset = 204 - (204 * gaugePercent / 100);
-            gaugeArc.style.strokeDashoffset = offset;
-        }
-    });
-
-    // Draw 100m buffer circle on map to visualize MEDIUM risk threshold
-    drawBufferCircle(data.lat, data.lon, data.risk);
+    // Draw 100m buffer circle on map
+    drawBufferCircle(data.lat, data.lon, risk);
 }
 
-// ---------- Buffer Circle (100m radius) ----------
+// ---------- Buffer Circle ----------
 let bufferCircle = null;
-
 function drawBufferCircle(lat, lon, risk) {
-    // Remove previous circle
-    if (bufferCircle) {
-        map.removeLayer(bufferCircle);
-        bufferCircle = null;
-    }
-    // Draw the 100m threshold circle
+    if (bufferCircle) { map.removeLayer(bufferCircle); bufferCircle = null; }
     const colors = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' };
-    const color = colors[risk] || '#888';
     bufferCircle = L.circle([lat, lon], {
-        radius: 100,           // 100 meters — the MEDIUM risk threshold
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.08,
-        weight: 2,
-        dashArray: '6,4',
-    }).addTo(map).bindTooltip('100m buffer zone (MEDIUM risk threshold)', {
-        permanent: false,
-        direction: 'top',
-    });
+        radius: 100, color: colors[risk] || '#888',
+        fillColor: colors[risk] || '#888', fillOpacity: 0.07,
+        weight: 2, dashArray: '6,4',
+    }).addTo(map).bindTooltip('100 m buffer zone', { permanent: false, direction: 'top' });
 }
+
+
+// ---------- Error Handling ----------
+function showError(msg) {
+    clearError();
+    const el = document.createElement('div');
+    el.className = 'error-message';
+    el.id = 'error-msg';
+    el.textContent = msg;
+    document.querySelector('.coord-panel').appendChild(el);
+}
+
+function clearError() {
+    const existing = document.getElementById('error-msg');
+    if (existing) existing.remove();
+}
+
+// ---------- Input Events ----------
+latInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnAnalyze.click(); });
+lonInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnAnalyze.click(); });
+
+// ---------- Init ----------
+document.addEventListener('DOMContentLoaded', initMap);
+
+
+
 
 
 // ---------- Error Handling ----------
