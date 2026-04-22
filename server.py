@@ -13,6 +13,61 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 CORS(app)
 
+
+# ============================================================
+# LAYER 0 — Ocean / Sea Detector (reverse geocode check)
+# ============================================================
+
+def is_on_land(lat, lon):
+    """
+    Check if a coordinate is on land or in ocean/sea.
+    Uses Nominatim reverse geocoding:
+      - If it returns an address with a country → on land
+      - If it returns 'ocean', 'sea', or error → in water
+
+    Returns:
+        True  → point is on land
+        False → point is in ocean/sea (HIGH risk)
+        None  → could not determine (treat as land, let other layers handle)
+    """
+    params = urllib.parse.urlencode({
+        "lat": lat, "lon": lon,
+        "format": "json", "zoom": 5,
+    })
+    url = f"https://nominatim.openstreetmap.org/reverse?{params}"
+    req = urllib.request.Request(url, headers={"User-Agent": "LandSafetyChecker/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+
+        # Nominatim returns {"error": "..."} for ocean points
+        if "error" in data:
+            return False   # ocean — not on land
+
+        # Check if it's tagged as ocean/sea explicitly
+        osm_type = data.get("type", "").lower()
+        osm_class = data.get("class", "").lower()
+        name = data.get("display_name", "").lower()
+
+        ocean_keywords = {"ocean", "sea", "strait", "gulf", "bay"}
+        if osm_type in ocean_keywords or osm_class in {"place", "natural"} and osm_type in ocean_keywords:
+            return False
+
+        # Check name for ocean/sea references
+        for kw in ocean_keywords:
+            if kw in name:
+                return False
+
+        # Has a country code → it's on land
+        address = data.get("address", {})
+        if address.get("country_code"):
+            return True
+
+        return None   # uncertain → treat as land
+    except Exception:
+        return None   # network error → treat as land, let other layers handle
+
+
 def geocode(place_name):
     """Query Nominatim to convert a place name to coordinates + OSM class/type."""
     params = urllib.parse.urlencode({"q": place_name, "format": "json", "limit": 1})
@@ -355,6 +410,28 @@ def api_analyze():
         lat, lon = float(lat), float(lon)
     except (TypeError, ValueError):
         return jsonify({"error": "lat and lon must be numbers"}), 400
+
+    # ----- Layer 0: Ocean/Sea detection -----
+    land_check = is_on_land(lat, lon)
+    if land_check is False:
+        # Point is in ocean/sea → HIGH risk directly
+        result = {
+            "risk": "HIGH",
+            "water_risk": "HIGH",
+            "forest_risk": "LOW",
+            "inside_water": True,
+            "inside_forest": False,
+            "distance_to_water": 0,
+            "distance_to_forest": None,
+            "water_reason": "Location lies within a water body (sea/ocean)",
+            "forest_reason": None,
+            "lat": lat,
+            "lon": lon,
+        }
+        if resolved_name:
+            result["resolved_name"] = resolved_name
+        return jsonify(result)
+    # If land_check is True or None, continue with normal analysis
 
     # Layer 1: local GeoJSON (always fast — 3-40ms)
     result = analyze_risk(lat, lon)
