@@ -370,17 +370,15 @@ def api_analyze():
     if nominatim_env:
         return jsonify(apply_env_override(result, nominatim_env, "OpenStreetMap search"))
 
-    # Layer 3: Overpass world-map query
-    # PERFORMANCE RULE: Only call Overpass when:
-    #   (a) The request came from a location NAME search (not raw lat/lon click)
-    #   (b) The local GeoJSON result is still LOW/MEDIUM
-    # For raw lat/lon clicks, local data is the source of truth → instant response
-    if location_name:   # name search → user typed a place name → check world map
-        overpass_env = check_via_overpass(lat, lon)
-        if overpass_env:
-            apply_env_override(result, overpass_env, "OpenStreetMap world map")
+    # Layer 3: Overpass world-map query (global coverage for any coordinate)
+    # Called for BOTH name-based and coordinate-based requests when local data
+    # does not already return HIGH. Hard 5s timeout ensures fast response.
+    overpass_env = check_via_overpass(lat, lon)
+    if overpass_env:
+        apply_env_override(result, overpass_env, "OpenStreetMap world map")
 
     return jsonify(result)
+
 
 
 @app.route("/api/layers/water")
