@@ -1,3 +1,5 @@
+<div align="center">
+
 # 🗺️ GIS Tracker — Geospatial Land Safety & Compliance Analyzer
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -12,6 +14,8 @@
 > 💡 **No black-box ML.** Every output is justified using explicit spatial rules — ensuring full explainability and legal reliability.
 
 [Features](#-features) • [How It Works](#-how-it-works) • [Risk Logic](#-risk-classification-logic) • [Installation](#-installation) • [Usage](#-usage) • [Architecture](#-architecture) • [Team](#-team)
+
+</div>
 
 ---
 
